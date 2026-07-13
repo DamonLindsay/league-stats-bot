@@ -116,7 +116,7 @@ export async function generateStatsCard(rows: StatsCardRow[]): Promise<Buffer> {
             const nameWidth = ctx.measureText(row.discordName).width;
             ctx.fillStyle = "#ffd700";
             ctx.font = "bold 20px sans-serif";
-            ctx.fillText("★ TOP", PADDING + 30 + nameWidth + 15, y + 35)
+            ctx.fillText("TOP PERFORMER", PADDING + 30 + nameWidth + 15, y + 35)
         }
 
         // Status label
