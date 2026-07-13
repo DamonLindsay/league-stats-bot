@@ -77,17 +77,26 @@ export async function generateStatsCard(rows: StatsCardRow[]): Promise<Buffer> {
     ctx.font = "20px sans-serif";
     ctx.fillText("Last 7 Days", PADDING, 95);
 
+    // Find the top performer by win rate, to highlight on the card.
+    const topWinRate = Math.max(...rows.map((r) => r.winRate));
+    const topRowIndex = rows.findIndex((r) => r.winRate === topWinRate && r.winRate > 0);
+
     // Rows
     rows.forEach((row, index) => {
         const y = HEADER_HEIGHT + index * ROW_HEIGHT;
         const accentColor = row.winRate >= 50 ? "#3fb950" : "#f85149";
 
         // Row background
-        ctx.fillStyle = index % 2 === 0 ? "#161b22" : "#0d1117";
-        ctx.fillRect(PADDING, y, WIDTH - PADDING * 2, ROW_HEIGHT - 10);
+        const isTopPerformer = index === topRowIndex;
+        ctx.fillStyle = isTopPerformer
+            ? "#2d2411"
+            : index % 2 === 0
+            ? "#161b22"
+            : "#0d1117";
+        ctx.fillRect(PADDING, y, WIDTH - PADDING * 2, ROW_HEIGHT - 10)
 
         // Accent bar
-        ctx.fillStyle = accentColor;
+        ctx.fillStyle = isTopPerformer ? "#ffd700" : accentColor;
         ctx.fillRect(PADDING, y, 6, ROW_HEIGHT - 10);
 
         // Champion Icon
@@ -102,6 +111,13 @@ export async function generateStatsCard(rows: StatsCardRow[]): Promise<Buffer> {
         ctx.fillStyle = "#f0f6fc";
         ctx.font = "bold 26px sans-serif";
         ctx.fillText(row.discordName, PADDING + 30, y + 35);
+
+        if (isTopPerformer) {
+            const nameWidth = ctx.measureText(row.discordName).width;
+            ctx.fillStyle = "#ffd700";
+            ctx.font = "bold 20px sans-serif";
+            ctx.fillText("★ TOP", PADDING + 30 + nameWidth + 15, y + 35)
+        }
 
         // Status label
         ctx.fillStyle = "#8b949e";
