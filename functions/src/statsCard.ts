@@ -81,6 +81,12 @@ export async function generateStatsCard(rows: StatsCardRow[]): Promise<Buffer> {
     const topWinRate = Math.max(...rows.map((r) => r.winRate));
     const topRowIndex = rows.findIndex((r) => r.winRate === topWinRate && r.winRate > 0);
 
+    // Find the worst performer by win rate, to highlight on the card.
+    const worstWinRate = Math.min(...rows.map((r) => r.winRate));
+    const worstRowIndex = rows.findIndex(
+        (r, i) => r.winRate === worstWinRate && i !== topRowIndex
+    );
+
     // Rows
     rows.forEach((row, index) => {
         const y = HEADER_HEIGHT + index * ROW_HEIGHT;
@@ -88,15 +94,18 @@ export async function generateStatsCard(rows: StatsCardRow[]): Promise<Buffer> {
 
         // Row background
         const isTopPerformer = index === topRowIndex;
+        const isWorstPerformer = index === worstRowIndex;
         ctx.fillStyle = isTopPerformer
             ? "#2d2411"
+            : isWorstPerformer
+            ? "#2d1111"
             : index % 2 === 0
             ? "#161b22"
             : "#0d1117";
         ctx.fillRect(PADDING, y, WIDTH - PADDING * 2, ROW_HEIGHT - 10)
 
         // Accent bar
-        ctx.fillStyle = isTopPerformer ? "#ffd700" : accentColor;
+        ctx.fillStyle = isTopPerformer ? "#ffd700" : isWorstPerformer ? "#ff4444" : accentColor;
         ctx.fillRect(PADDING, y, 6, ROW_HEIGHT - 10);
 
         // Champion Icon
@@ -117,6 +126,13 @@ export async function generateStatsCard(rows: StatsCardRow[]): Promise<Buffer> {
             ctx.fillStyle = "#ffd700";
             ctx.font = "bold 20px sans-serif";
             ctx.fillText("TOP PERFORMER", PADDING + 30 + nameWidth + 15, y + 35)
+        }
+
+        if (isWorstPerformer) {
+            const nameWidth = ctx.measureText(row.discordName).width;
+            ctx.fillStyle = "#ff4444";
+            ctx.font = "bold 20px sans-serif";
+            ctx.fillText("WORST PERFORMER", PADDING + 30 + nameWidth + 15, y + 35)
         }
 
         // Status label
