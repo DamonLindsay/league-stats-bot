@@ -106,3 +106,88 @@ export async function getMostRecentMatch(
 
     return participant ?? null;
 }
+
+export interface RecentStatsSummary {
+    gamesPlayed: number;
+    wins: number;
+    losses: number;
+    winRate: number;
+    avgKills: number;
+    avgDeaths: number;
+    avgAssists: number;
+    mostPlayedChampion: string;
+}
+
+/**
+ * Aggregates a player's match history over the last N days: win rate,
+ * average KDA, and most-played champion.  Uses Match-V56's startTime
+ * filter to only fetch match IDs within the window server-side, rather
+ * than fetching everything and discording old matches client side.
+ */
+export async function getRecentStats(
+    puuid: string,
+    regionalCluster: string,
+    apiKey: string,
+    days: number
+): Promise<RecentStatsSummary | null> {
+    const startTime = Math.floor(Date.now() / 1000) - days * 24 * 60 * 60;
+
+    const idsUrl = `https://${regionalCluster}.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids?startTime=${startTime}&count=100`;
+
+    const idsResponse = await axios.get<string[]>(idsUrl, {
+        headers: { "X-Riot-Token": apiKey },
+    });
+
+    const matchIds = idsResponse.data;
+
+    if (matchIds.length === 0) {
+        return null;
+    }
+
+    const participants: MatchParticipant[] = [];
+
+    for (const matchId of matchIds) {
+        const matchUrl = `https://${regionalCluster}.api.riotgames.com/lol/match/v5/matches/${matchId}`;
+
+        const matchResponse = await axios.get<MatchInfo>(matchUrl, {
+            headers: { "X-Riot-Token": apiKey },
+        });
+
+        const participant = matchResponse.data.info.participants.find(
+            (p) => p.puuid === puuid
+        );
+
+        if (participant) {
+            participants.push(participant);
+        }
+    }
+
+    if (participants.length === 0) {
+        return null;
+    }
+
+    const wins = participants.filter((p) => p.win).length;
+    const totalKills = participants.reduce((sum, p) => sum + p.kills, 0);
+    const totalDeaths = participants.reduce((sum, p) => sum + p.deaths, 0);
+    const totalAssists = participants.reduce((sum, p) => sum + p.assists, 0);
+
+    const championCounts: Record<string, number> = {};
+    for (const p of participants) {
+        championCounts[p.championName] = (championCounts[p.championName] || 0) + 1;
+    }
+
+    const mostPlayedChampion = Object.entries(championCounts).sort(
+        (a, b) => b[1] - a[1]
+    )[0][0];
+
+    return {
+        gamesPlayed: participants.length,
+        wins,
+        losses: participants.length - wins,
+        winRate: Math.round((wins / participants.length) * 100),
+        avgKills: Math.round((totalKills / participants.length) * 10) / 10,
+        avgDeaths: Math.round((totalDeaths / participants.length) * 10) / 10,
+        avgAssists: Math.round((totalAssists / participants.length) * 10) / 10,
+        mostPlayedChampion,
+    };
+}
