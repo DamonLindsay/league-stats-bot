@@ -1,4 +1,5 @@
-import { createCanvas } from "@napi-rs/canvas"
+import { createCanvas, loadImage } from "@napi-rs/canvas"
+import axios from "axios";
 
 export interface StatsCardRow {
     discordName: string;
@@ -7,6 +8,7 @@ export interface StatsCardRow {
     winRate: number; // 0-100, drives the accent color
     kda: string; // e.g. "9-0 / 4.1 / 6.4"
     highlight: string; //e.g. "GOLD II - 45 LP" or "Most played: Nasus"
+    championId?: string; // e.g. "Nasus" - used to fetch the champion icon
 }
 
 const WIDTH = 1000;
@@ -14,11 +16,29 @@ const HEADER_HEIGHT = 130;
 const ROW_HEIGHT = 100;
 const PADDING = 30;
 
+let cachedVersion: string | null = null;
+
+/**
+ * Fetches the current Data Dragon patch version, caching it for the
+ * lifetime of this function instance to avoid refetching on every row 
+ */
+async function getDdragonVersion(): Promise<string> {
+    if (cachedVersion) {
+        return cachedVersion;
+    }
+
+    const response = await axios.get<string[]>(
+        "https://ddragon.leagueoflegends.com/api/versions.json"
+    );
+
+    cachedVersion = response.data[0];
+    return cachedVersion;
+}
+
 /**
  * Renders a dark, scoreboard-style PNG summarizing each player's stats.
  * Returns a PNG buffer ready to be uploaded as a Discord attachment.
  */
-
 export function generateStatsCard(rows: StatsCardRow[]): Buffer {
     const height = HEADER_HEIGHT + rows.length * ROW_HEIGHT + PADDING;
     const canvas = createCanvas(WIDTH, height);
