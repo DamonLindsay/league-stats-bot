@@ -71,6 +71,7 @@ export const dailyLeagueStats = onSchedule(
                             winRate: stats.winRate,
                             kda: `${stats.avgKills} / ${stats.avgDeaths} / ${stats.avgAssists}`,
                             highlight: `Most played: ${stats.mostPlayedChampion}`,
+                            championId: stats.mostPlayedChampion,
                         });
                     } else {
                         rows.push({
@@ -95,7 +96,7 @@ export const dailyLeagueStats = onSchedule(
                 });
             }
         }
-        const imageBuffer = generateStatsCard(rows);
+        const imageBuffer = await generateStatsCard(rows);
         await postImageToDiscord(
             discordWebhookUrl.value(),
             imageBuffer,

@@ -39,7 +39,27 @@ async function getDdragonVersion(): Promise<string> {
  * Renders a dark, scoreboard-style PNG summarizing each player's stats.
  * Returns a PNG buffer ready to be uploaded as a Discord attachment.
  */
-export function generateStatsCard(rows: StatsCardRow[]): Buffer {
+export async function generateStatsCard(rows: StatsCardRow[]): Promise<Buffer> {
+    const version = await getDdragonVersion();
+
+    // Preload all champion icons first, since image loading is async
+    // but the actual drawiong below needs to happen synchronously in order.
+    const iconCache = new Map<string, Awaited<ReturnType<typeof loadImage>> | null>();
+
+    for (const row of rows) {
+        if (row.championId && !iconCache.has(row.championId)) {
+            try {
+                const iconUrl = `https://ddragon.leagueoflegends.com/cdn/${version}/img/champion/${row.championId}.png`
+                const image = await loadImage(iconUrl);
+                iconCache.set(row.championId, image);
+            } catch (error) {
+                // Champion name might not match ddragon's internal ID
+                // (e.g. Wukong -> MonkeyKing) - fail gracefully, no icon.
+                iconCache.set(row.championId, null);
+            }
+        }
+    }
+
     const height = HEADER_HEIGHT + rows.length * ROW_HEIGHT + PADDING;
     const canvas = createCanvas(WIDTH, height);
     const ctx = canvas.getContext("2d");
@@ -70,6 +90,14 @@ export function generateStatsCard(rows: StatsCardRow[]): Buffer {
         ctx.fillStyle = accentColor;
         ctx.fillRect(PADDING, y, 6, ROW_HEIGHT - 10);
 
+        // Champion Icon
+        const icon = row.championId ? iconCache.get(row.championId) : null;
+        if (icon) {
+            const iconSize = 64;
+            const iconY = y + (ROW_HEIGHT - 10 - iconSize) / 2;
+            ctx.drawImage(icon, WIDTH - PADDING - 20 - iconSize, iconY, iconSize, iconSize);
+        }
+
         // Name
         ctx.fillStyle = "#f0f6fc";
         ctx.font = "bold 26px sans-serif";
@@ -90,11 +118,12 @@ export function generateStatsCard(rows: StatsCardRow[]): Buffer {
         ctx.font = "20px sans-serif";
         ctx.fillText(`KDA: ${row.kda}`, PADDING + 350, y + 70);
 
-        //Highlight (right-aligned)
+        //Highlight (right-aligned, shifted left if there's an icon)
+        const highlightRightEdge = icon ? WIDTH - PADDING - 20 - 64 - 15: WIDTH - PADDING - 20;
         ctx.fillStyle = "#e6c88c";
         ctx.font = "bold 20px sans-serif";
         const highlightWidth = ctx.measureText(row.highlight).width;
-        ctx.fillText(row.highlight, WIDTH - PADDING - 20 - highlightWidth, y + 50);
+        ctx.fillText(row.highlight, highlightRightEdge - highlightWidth, y + 50);
     });
 
     return canvas.toBuffer("image/png")
