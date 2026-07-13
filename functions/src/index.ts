@@ -28,6 +28,34 @@ const friends: Friend[] = [
         platform: "oc1",
         regionalCluster: "asia",
     },
+    {
+        discordName: "CynicalDahlia",
+        gameName: "Cynical Dahlia",
+        tagLine: "OC",
+        platform: "oc1",
+        regionalCluster: "asia"
+    },
+    {
+        discordName: "Benevolence",
+        gameName: "Benevolence",
+        tagLine: "Benee",
+        platform: "oc1",
+        regionalCluster: "asia"
+    },
+    {
+        discordName: "Camzar",
+        gameName: "Cazara",
+        tagLine: "zonk",
+        platform: "oc1",
+        regionalCluster: "asia"
+    },
+    {
+        discordName: "JordsPords",
+        gameName: "Jordspords",
+        tagLine: "2101",
+        platform: "oc1",
+        regionalCluster: "asia"
+    }
 ];
 
 export const dailyLeagueStats = onSchedule(
