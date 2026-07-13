@@ -53,6 +53,7 @@ export const dailyLeagueStats = onSchedule(
                             (soloQueue.wins / (soloQueue.wins + soloQueue.losses)) * 100
                         ),
                         kda: "-",
+                        kdaRatio: 0,
                         highlight: `${soloQueue.tier} ${soloQueue.rank} · ${soloQueue.leaguePoints} LP`,
                     });
                 } else {
@@ -64,12 +65,17 @@ export const dailyLeagueStats = onSchedule(
                     );
 
                     if (stats) {
+                        const kdaRatio = stats.avgDeaths === 0
+                            ? stats.avgKills + stats.avgAssists
+                            : (stats.avgKills + stats.avgAssists) / stats.avgDeaths;
+
                         rows.push({
                             discordName: friend.discordName,
                             statusLabel: `LAST 7 DAYS · ${stats.gamesPlayed} GAMES`,
                             record: `${stats.wins}W - ${stats.losses}L`,
                             winRate: stats.winRate,
                             kda: `${stats.avgKills} / ${stats.avgDeaths} / ${stats.avgAssists}`,
+                            kdaRatio: Math.round(kdaRatio * 100) / 100,
                             highlight: `Most played: ${stats.mostPlayedChampion}`,
                             championId: stats.mostPlayedChampion,
                         });
@@ -80,6 +86,7 @@ export const dailyLeagueStats = onSchedule(
                             record: "0W - 0L",
                             winRate: 0,
                             kda: "-",
+                            kdaRatio: 0,
                             highlight: "No games played",
                         });
                     }
@@ -92,10 +99,19 @@ export const dailyLeagueStats = onSchedule(
                     record: "-",
                     winRate: 0,
                     kda: "-",
+                    kdaRatio: 0,
                     highlight: "Couldn't fetch stats",
                 });
             }
         }
+
+        rows.sort((a, b) => {
+            if (b.winRate !== a.winRate) {
+                return b.winRate - a.winRate;
+            }
+            return b.kdaRatio - a.kdaRatio;
+        });
+
         const imageBuffer = await generateStatsCard(rows);
         await postImageToDiscord(
             discordWebhookUrl.value(),
