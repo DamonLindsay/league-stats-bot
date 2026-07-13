@@ -20,6 +20,8 @@ export const dailyLeagueStats = onSchedule(
         schedule: "every day 19:00",
         timeZone: "Australia/Brisbane",
         secrets: [riotApiKey, discordWebhookUrl],
+        timeoutSeconds: 300,
+        memory: "512MiB"
     },
     async () => {
         const friends = await getFriends();
