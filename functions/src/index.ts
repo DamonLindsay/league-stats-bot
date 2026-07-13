@@ -2,7 +2,7 @@ import { setGlobalOptions } from "firebase-functions";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
 import * as logger from "firebase-functions/logger";
-import { getPuuid, getRankByPuuid, getMostRecentMatch } from "./riot";
+import { getPuuid, getRankByPuuid, getRecentStats } from "./riot";
 import { postToDiscord } from "./discord";
 import { getFriends } from "./friends";
 import { initializeApp } from "firebase-admin/app";
@@ -48,19 +48,19 @@ export const dailyLeagueStats = onSchedule(
                         `**${friend.discordName}**: ${soloQueue.tier} ${soloQueue.rank} (${soloQueue.leaguePoints} LP) - ${soloQueue.wins}W ${soloQueue.losses}L`
                     );
                 } else {
-                    const recentMatch = await getMostRecentMatch(
+                    const stats = await getRecentStats(
                         puuid,
                         friend.matchRegionalCluster,
-                        riotApiKey.value()
+                        riotApiKey.value(),
+                        7
                     );
 
-                    if (recentMatch) {
-                        const result = recentMatch.win ? "Won": "Lost";
+                    if (stats) {
                         lines.push(
-                            `**${friend.discordName}**: Unranked - last game: ${result} as ${recentMatch.championName} (${recentMatch.kills}/${recentMatch.deaths}/${recentMatch.assists})`
+                            `**${friend.discordName}**: ${stats.gamesPlayed} games this week - ${stats.winRate}% WR (${stats.wins}W ${stats.losses}L), avg KDA ${stats.avgKills}/${stats.avgDeaths}/${stats.avgAssists}, most played: ${stats.mostPlayedChampion}`
                         );
                     } else {
-                        lines.push(`**${friend.discordName}**: Unranked - no recent matches found`)
+                        lines.push(`**${friend.discordName}**: No games in the last 7 days`);
                     }
                 }
             } catch (error) {
