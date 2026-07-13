@@ -7,6 +7,7 @@ export interface StatsCardRow {
     record: string; // e.g. "4W - 6L"
     winRate: number; // 0-100, drives the accent color
     kda: string; // e.g. "9-0 / 4.1 / 6.4"
+    kdaRatio: number; // numeric (kills + assists) / deaths, used for sort tiebreaking
     highlight: string; //e.g. "GOLD II - 45 LP" or "Most played: Nasus"
     championId?: string; // e.g. "Nasus" - used to fetch the champion icon
 }
