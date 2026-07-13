@@ -2,7 +2,7 @@ import { setGlobalOptions } from "firebase-functions";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
 import * as logger from "firebase-functions/logger";
-import { getPuuid, getRankByPuuid } from "./riot";
+import { getPuuid, getRankByPuuid, getMostRecentMatch } from "./riot";
 import { postToDiscord } from "./discord";
 
 setGlobalOptions({ maxInstances: 10 });
@@ -91,7 +91,20 @@ export const dailyLeagueStats = onSchedule(
                         `**${friend.discordName}**: ${soloQueue.tier} ${soloQueue.rank} (${soloQueue.leaguePoints} LP) - ${soloQueue.wins}W ${soloQueue.losses}L`
                     );
                 } else {
-                    lines.push(`**${friend.discordName}**: Unranked`);
+                    const recentMatch = await getMostRecentMatch(
+                        puuid,
+                        friend.regionalCluster,
+                        riotApiKey.value()
+                    );
+
+                    if (recentMatch) {
+                        const result = recentMatch.win ? "Won": "Lost";
+                        lines.push(
+                            `**${friend.discordName}**: Unranked - last game: ${result} as ${recentMatch.championName} (${recentMatch.kills}/${recentMatch.deaths}/${recentMatch.assists})`
+                        );
+                    } else {
+                        lines.push(`**${friend.discordName}**: Unranked - no recent matches found`)
+                    }
                 }
             } catch (error) {
                 logger.error(`Failed to fetch stats for ${friend.discordName}`, error);
