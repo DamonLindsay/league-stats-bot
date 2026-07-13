@@ -4,65 +4,15 @@ import { defineSecret } from "firebase-functions/params";
 import * as logger from "firebase-functions/logger";
 import { getPuuid, getRankByPuuid, getMostRecentMatch } from "./riot";
 import { postToDiscord } from "./discord";
+import { getFriends } from "./friends";
+import { initializeApp } from "firebase-admin/app";
+
+initializeApp();
 
 setGlobalOptions({ maxInstances: 10 });
 
 const riotApiKey = defineSecret("RIOT_API_KEY")
 const discordWebhookUrl = defineSecret("DISCORD_WEBHOOK_URL");
-
-interface Friend {
-    discordName: string;
-    gameName: string;
-    tagLine: string;
-    platform: string;
-    regionalCluster: string;
-    matchRegionalCluster: string;
-}
-
-// Hardcoded friend list for v1 - swap to Firestore later
-// Self-serve sign-up instead of manually editting code.
-const friends: Friend[] = [
-    {
-        discordName: "Damonides",
-        gameName: "Damonides",
-        tagLine: "GYATT",
-        platform: "oc1",
-        regionalCluster: "asia",
-        matchRegionalCluster: "sea"
-    },
-    {
-        discordName: "CynicalDahlia",
-        gameName: "Cynical Dahlia",
-        tagLine: "OC",
-        platform: "oc1",
-        regionalCluster: "asia",
-        matchRegionalCluster: "sea"
-    },
-    {
-        discordName: "Benevolence",
-        gameName: "Benevolence",
-        tagLine: "Benee",
-        platform: "oc1",
-        regionalCluster: "asia",
-        matchRegionalCluster: "sea"
-    },
-    {
-        discordName: "Camzar",
-        gameName: "Cazara",
-        tagLine: "zonk",
-        platform: "oc1",
-        regionalCluster: "asia",
-        matchRegionalCluster: "sea"
-    },
-    {
-        discordName: "JordsPords",
-        gameName: "Jordspords",
-        tagLine: "2101",
-        platform: "oc1",
-        regionalCluster: "asia",
-        matchRegionalCluster: "sea"
-    }
-];
 
 export const dailyLeagueStats = onSchedule(
     {
@@ -71,6 +21,7 @@ export const dailyLeagueStats = onSchedule(
         secrets: [riotApiKey, discordWebhookUrl],
     },
     async () => {
+        const friends = await getFriends();
         const lines: string[] = [];
 
         for (const friend of friends) {
