@@ -55,3 +55,54 @@ export async function getRankByPuuid(
 
     return response.data;
 }
+
+interface MatchParticipant {
+    puuid: string;
+    championName: string;
+    win: boolean;
+    kills: number;
+    deaths: number;
+    assists: number;
+}
+
+interface MatchInfo {
+    info: {
+        queueId: number;
+        participants: MatchParticipant[];
+    };
+}
+
+/**
+ * Fetches the player's most recent match and returns their personal
+ * result from it (champion, win/loss, KDA).  Works for any queue type
+ * (normals, ARAM ranked), unlike getRanjkByPuuid which only covers
+ * ranked queues.
+ */
+export async function getMostRecentMatch(
+    puuid: string,
+    regionalCluster: string,
+    apiKey: string
+): Promise<MatchParticipant | null> {
+    const idsUrl = `https://${regionalCluster}.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids?count=1`;
+
+    const idsResponse = await axios.get<string[]>(idsUrl, {
+        headers: { "X-Riot-Token": apiKey },
+    });
+
+    if (idsResponse.data.length === 0) {
+        return null;
+    }
+
+    const matchId = idsResponse.data[0];
+    const matchUrl = `https://${regionalCluster}.api.riotgames.com/lol/match/v5/matches/${matchId}`;
+
+    const matchResponse = await axios.get<MatchInfo>(matchUrl, {
+        headers: { "X-Riot-Token": apiKey },
+    });
+
+    const participant = matchResponse.data.info.participants.find(
+        (p) => p.puuid === puuid
+    );
+
+    return participant ?? null;
+}
