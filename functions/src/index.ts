@@ -26,7 +26,7 @@ const friends: Friend[] = [
         gameName: "Damonides",
         tagLine: "GYATT",
         platform: "oc1",
-        regionalCluster: "sea",
+        regionalCluster: "asia",
     },
 ];
 
