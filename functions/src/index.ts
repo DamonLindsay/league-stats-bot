@@ -3,8 +3,9 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
 import * as logger from "firebase-functions/logger";
 import { getPuuid, getRankByPuuid, getRecentStats } from "./riot";
-import { postToDiscord } from "./discord";
+import { postImageToDiscord } from "./discord";
 import { getFriends } from "./friends";
+import { generateStatsCard, StatsCardRow } from "./statsCard"
 import { initializeApp } from "firebase-admin/app";
 
 initializeApp();
@@ -16,13 +17,13 @@ const discordWebhookUrl = defineSecret("DISCORD_WEBHOOK_URL");
 
 export const dailyLeagueStats = onSchedule(
     {
-        schedule: "every day 09:00",
+        schedule: "every day 19:00",
         timeZone: "Australia/Brisbane",
         secrets: [riotApiKey, discordWebhookUrl],
     },
     async () => {
         const friends = await getFriends();
-        const lines: string[] = [];
+        const rows: StatsCardRow[] = [];
 
         for (const friend of friends) {
             try {
@@ -44,9 +45,16 @@ export const dailyLeagueStats = onSchedule(
                 );
 
                 if (soloQueue) {
-                    lines.push(
-                        `**${friend.discordName}**: ${soloQueue.tier} ${soloQueue.rank} (${soloQueue.leaguePoints} LP) - ${soloQueue.wins}W ${soloQueue.losses}L`
-                    );
+                    rows.push({
+                        discordName: friend.discordName,
+                        statusLabel: "RANKED SOLO/DUO",
+                        record: `${soloQueue.wins}W - ${soloQueue.losses}L`,
+                        winRate: Math.round(
+                            (soloQueue.wins / (soloQueue.wins + soloQueue.losses)) * 100
+                        ),
+                        kda: "-",
+                        highlight: `${soloQueue.tier} ${soloQueue.rank} · ${soloQueue.leaguePoints} LP`,
+                    });
                 } else {
                     const stats = await getRecentStats(
                         puuid,
@@ -56,19 +64,42 @@ export const dailyLeagueStats = onSchedule(
                     );
 
                     if (stats) {
-                        lines.push(
-                            `**${friend.discordName}**: ${stats.gamesPlayed} games this week - ${stats.winRate}% WR (${stats.wins}W ${stats.losses}L), avg KDA ${stats.avgKills}/${stats.avgDeaths}/${stats.avgAssists}, most played: ${stats.mostPlayedChampion}`
-                        );
+                        rows.push({
+                            discordName: friend.discordName,
+                            statusLabel: `LAST 7 DAYS · ${stats.gamesPlayed} GAMES`,
+                            record: `${stats.wins}W - ${stats.losses}L`,
+                            winRate: stats.winRate,
+                            kda: `${stats.avgKills} / ${stats.avgDeaths} / ${stats.avgAssists}`,
+                            highlight: `Most played: ${stats.mostPlayedChampion}`,
+                        });
                     } else {
-                        lines.push(`**${friend.discordName}**: No games in the last 7 days`);
+                        rows.push({
+                            discordName: friend.discordName,
+                            statusLabel: "LAST 7 DAYS",
+                            record: "0W - 0L",
+                            winRate: 0,
+                            kda: "-",
+                            highlight: "No games played",
+                        });
                     }
                 }
             } catch (error) {
                 logger.error(`Failed to fetch stats for ${friend.discordName}`, error);
-                lines.push(`**${friend.discordName}**: couldn't fetch stats`);
+                rows.push({
+                    discordName: friend.discordName,
+                    statusLabel: "ERROR",
+                    record: "-",
+                    winRate: 0,
+                    kda: "-",
+                    highlight: "Couldn't fetch stats",
+                });
             }
         }
-        const message = `📊 **Daily League Stats**\n${lines.join("\n")}`;
-        await postToDiscord(discordWebhookUrl.value(), message);
+        const imageBuffer = generateStatsCard(rows);
+        await postImageToDiscord(
+            discordWebhookUrl.value(),
+            imageBuffer,
+            "weekly-league-report.png"
+        );
     }
 );
