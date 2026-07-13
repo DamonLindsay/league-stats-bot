@@ -16,6 +16,7 @@ interface Friend {
     tagLine: string;
     platform: string;
     regionalCluster: string;
+    matchRegionalCluster: string;
 }
 
 // Hardcoded friend list for v1 - swap to Firestore later
@@ -27,34 +28,39 @@ const friends: Friend[] = [
         tagLine: "GYATT",
         platform: "oc1",
         regionalCluster: "asia",
+        matchRegionalCluster: "sea"
     },
     {
         discordName: "CynicalDahlia",
         gameName: "Cynical Dahlia",
         tagLine: "OC",
         platform: "oc1",
-        regionalCluster: "asia"
+        regionalCluster: "asia",
+        matchRegionalCluster: "sea"
     },
     {
         discordName: "Benevolence",
         gameName: "Benevolence",
         tagLine: "Benee",
         platform: "oc1",
-        regionalCluster: "asia"
+        regionalCluster: "asia",
+        matchRegionalCluster: "sea"
     },
     {
         discordName: "Camzar",
         gameName: "Cazara",
         tagLine: "zonk",
         platform: "oc1",
-        regionalCluster: "asia"
+        regionalCluster: "asia",
+        matchRegionalCluster: "sea"
     },
     {
         discordName: "JordsPords",
         gameName: "Jordspords",
         tagLine: "2101",
         platform: "oc1",
-        regionalCluster: "asia"
+        regionalCluster: "asia",
+        matchRegionalCluster: "sea"
     }
 ];
 
@@ -93,7 +99,7 @@ export const dailyLeagueStats = onSchedule(
                 } else {
                     const recentMatch = await getMostRecentMatch(
                         puuid,
-                        friend.regionalCluster,
+                        friend.matchRegionalCluster,
                         riotApiKey.value()
                     );
 
