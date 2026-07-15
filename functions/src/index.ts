@@ -134,7 +134,7 @@ export const dailyLeagueStats = onSchedule(
         sortRows(riftRows);
         sortRows(aramRows);
 
-        const riftImage = await generateStatsCard(riftRows);
+        const riftImage = await generateStatsCard(riftRows, "SUMMONER'S RIFT REPORT");
         await postImageToDiscord(
             discordWebhookUrl.value(),
             riftImage,
@@ -142,7 +142,7 @@ export const dailyLeagueStats = onSchedule(
         );
 
         if (aramRows.length > 0) {
-            const aramImage = await generateStatsCard(aramRows);
+            const aramImage = await generateStatsCard(aramRows, "ARAM REPORT");
             await postImageToDiscord(
                 discordWebhookUrl.value(),
                 aramImage,
