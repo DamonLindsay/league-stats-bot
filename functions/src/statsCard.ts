@@ -1,5 +1,11 @@
-import { createCanvas, loadImage } from "@napi-rs/canvas"
+import { createCanvas, loadImage, GlobalFonts } from "@napi-rs/canvas";
 import axios from "axios";
+import * as path from "path";
+
+GlobalFonts.registerFromPath(
+    path.join(__dirname, "..", "assets", "fonts", "Oswald-Bold.ttf"),
+    "Oswald"
+);
 
 export interface StatsCardRow {
     discordName: string;
@@ -71,11 +77,11 @@ export async function generateStatsCard(rows: StatsCardRow[]): Promise<Buffer> {
 
     // Header
     ctx.fillStyle = "#e6c88c";
-    ctx.font = "bold 40px sans-serif";
+    ctx.font = "bold 40px Oswald";
     ctx.fillText("WEEKLY LEAGUE REPORT", PADDING, 65);
 
     ctx.fillStyle = "#8b949e";
-    ctx.font = "20px sans-serif";
+    ctx.font = "20px Oswald";
     ctx.fillText("Last 7 Days", PADDING, 95);
 
     // Find the top performer by win rate, to highlight on the card.
@@ -119,42 +125,42 @@ export async function generateStatsCard(rows: StatsCardRow[]): Promise<Buffer> {
 
         // Name
         ctx.fillStyle = "#f0f6fc";
-        ctx.font = "bold 26px sans-serif";
+        ctx.font = "bold 26px Oswald";
         ctx.fillText(row.discordName, PADDING + 30, y + 35);
 
         if (isTopPerformer) {
             const nameWidth = ctx.measureText(row.discordName).width;
             ctx.fillStyle = "#ffd700";
-            ctx.font = "bold 20px sans-serif";
+            ctx.font = "bold 20px Oswald";
             ctx.fillText("TOP PERFORMER", PADDING + 30 + nameWidth + 15, y + 35)
         }
 
         if (isWorstPerformer) {
             const nameWidth = ctx.measureText(row.discordName).width;
             ctx.fillStyle = "#ff4444";
-            ctx.font = "bold 20px sans-serif";
+            ctx.font = "bold 20px Oswald";
             ctx.fillText("WORST PERFORMER", PADDING + 30 + nameWidth + 15, y + 35)
         }
 
         // Status label
         ctx.fillStyle = "#8b949e";
-        ctx.font = "16px sans-serif";
+        ctx.font = "16px Oswald";
         ctx.fillText(row.statusLabel, PADDING + 30, y + 60);
 
         // Record + win rate
         ctx.fillStyle = accentColor;
-        ctx.font = "bold 24px sans-serif";
+        ctx.font = "bold 24px Oswald";
         ctx.fillText(`${row.record} (${row.winRate}%)`, PADDING + 350, y + 40);
 
         // KDA
         ctx.fillStyle = "#c9d1d9";
-        ctx.font = "20px sans-serif";
+        ctx.font = "20px Oswald";
         ctx.fillText(`KDA: ${row.kda}`, PADDING + 350, y + 70);
 
         //Highlight (right-aligned, shifted left if there's an icon)
         const highlightRightEdge = icon ? WIDTH - PADDING - 20 - 64 - 15: WIDTH - PADDING - 20;
         ctx.fillStyle = "#e6c88c";
-        ctx.font = "bold 20px sans-serif";
+        ctx.font = "bold 20px Oswald";
         const highlightWidth = ctx.measureText(row.highlight).width;
         ctx.fillText(row.highlight, highlightRightEdge - highlightWidth, y + 50);
     });
