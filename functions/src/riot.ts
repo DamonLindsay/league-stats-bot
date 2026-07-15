@@ -108,8 +108,25 @@ export async function getMostRecentMatch(
     return participant ?? null;
 }
 
-const RIFT_QUEUE_IDS = [400, 420, 430, 440];
-const ARAM_QUEUE_IDS = [450, 710];  // 450 = regular ARAM, 710 = ARAM: Mayhem
+const QUEUE_NORMAL_DRAFT = 400;
+const QUEUE_RANKED_SOLO_DUO = 420;
+const QUEUE_NORMAL_BLIND = 430;
+const QUEUE_RANKED_FLEX = 440;
+const QUEUE_RANKED_5S_LIMITED = 710;  // Ranked 5s, limited-time mode - Rift-style, not aram
+
+const QUEUE_ARAM = 450;
+
+const RIFT_QUEUE_IDS = [
+    QUEUE_NORMAL_DRAFT,
+    QUEUE_RANKED_SOLO_DUO,
+    QUEUE_NORMAL_BLIND,
+    QUEUE_RANKED_FLEX,
+    QUEUE_RANKED_5S_LIMITED,
+];
+
+const ARAM_QUEUE_IDS = [
+    QUEUE_ARAM,
+];
 
 export interface CategorizedStats {
     rift: RecentStatsSummary | null;
