@@ -25,7 +25,8 @@ export const dailyLeagueStats = onSchedule(
     },
     async () => {
         const friends = await getFriends();
-        const rows: StatsCardRow[] = [];
+        const riftRows: StatsCardRow[] = [];
+        const aramRows: StatsCardRow[] = [];
 
         for (const friend of friends) {
             try {
@@ -46,56 +47,70 @@ export const dailyLeagueStats = onSchedule(
                     (r) => r.queueType === "RANKED_SOLO_5x5"
                 );
 
-                if (soloQueue) {
-                    rows.push({
+                const { rift, aram } = await getRecentStats(
+                    puuid,
+                    friend.matchRegionalCluster,
+                    riotApiKey.value(),
+                    7
+                );
+
+                // Rift row - always built, even with no recent games,
+                // since it's the "main" card everyone appears on.
+                if (rift) {
+                    const kdaRatio = rift.avgDeaths === 0
+                        ? rift.avgKills + rift.avgAssists
+                        : (rift.avgKills + rift.avgAssists) / rift.avgDeaths;
+
+                    const rankSuffix = soloQueue
+                        ? ` . ${soloQueue.tier} ${soloQueue.rank} (${soloQueue.leaguePoints} LP)`
+                        : "";
+
+                    riftRows.push({
                         discordName: friend.discordName,
-                        statusLabel: "RANKED SOLO/DUO",
-                        record: `${soloQueue.wins}W - ${soloQueue.losses}L`,
-                        winRate: Math.round(
-                            (soloQueue.wins / (soloQueue.wins + soloQueue.losses)) * 100
-                        ),
-                        kda: "-",
-                        kdaRatio: 0,
-                        highlight: `${soloQueue.tier} ${soloQueue.rank} · ${soloQueue.leaguePoints} LP`,
+                        statusLabel: `LAST 7 DAYS · ${rift.gamesPlayed} GAMES`,
+                        record: `${rift.wins}W - ${rift.losses}L`,
+                        winRate: rift.winRate,
+                        kda: `${rift.avgKills} / ${rift.avgDeaths} / ${rift.avgAssists} (${Math.round(kdaRatio * 100) / 100} KDA)`,
+                        kdaRatio: Math.round(kdaRatio * 100) / 100,
+                        highlight: `Most played: ${rift.mostPlayedChampion}${rankSuffix}`,
+                        championId: rift.mostPlayedChampion,
                     });
                 } else {
-                    const stats = await getRecentStats(
-                        puuid,
-                        friend.matchRegionalCluster,
-                        riotApiKey.value(),
-                        7
-                    );
+                    riftRows.push({
+                        discordName: friend.discordName,
+                        statusLabel: "LAST 7 DAYS",
+                        record: "0W - 0L",
+                        winRate: 0,
+                        kda: "-",
+                        kdaRatio: 0,
+                        highlight: soloQueue
+                            ? `${soloQueue.tier} ${soloQueue.rank} (${soloQueue.leaguePoints} LP)`
+                            : "No games played",
+                    });
+                }
 
-                    if (stats) {
-                        const kdaRatio = stats.avgDeaths === 0
-                            ? stats.avgKills + stats.avgAssists
-                            : (stats.avgKills + stats.avgAssists) / stats.avgDeaths;
+                // ARAM row - only included if they actually played ARAM
+                // this week, so the ARAM card doesn't fill up with
+                // "no games" for people who never play it.
+                if (aram) {
+                    const kdaRatio = aram.avgDeaths === 0
+                        ? aram.avgKills + aram.avgAssists
+                        : (aram.avgKills + aram.avgAssists) / aram.avgDeaths;
 
-                        rows.push({
-                            discordName: friend.discordName,
-                            statusLabel: `LAST 7 DAYS · ${stats.gamesPlayed} GAMES`,
-                            record: `${stats.wins}W - ${stats.losses}L`,
-                            winRate: stats.winRate,
-                            kda: `${stats.avgKills} / ${stats.avgDeaths} / ${stats.avgAssists} (${Math.round(kdaRatio * 100) / 100} KDA)`,
-                            kdaRatio: Math.round(kdaRatio * 100) / 100,
-                            highlight: `Most played: ${stats.mostPlayedChampion}`,
-                            championId: stats.mostPlayedChampion,
-                        });
-                    } else {
-                        rows.push({
-                            discordName: friend.discordName,
-                            statusLabel: "LAST 7 DAYS",
-                            record: "0W - 0L",
-                            winRate: 0,
-                            kda: "-",
-                            kdaRatio: 0,
-                            highlight: "No games played",
-                        });
-                    }
+                    aramRows.push({
+                        discordName: friend.discordName,
+                        statusLabel: `LAST 7 DAYS · ${aram.gamesPlayed} GAMES`,
+                        record: `${aram.wins}W - ${aram.losses}L`,
+                        winRate: aram.winRate,
+                        kda: `${aram.avgKills} / ${aram.avgDeaths} / ${aram.avgAssists} (${Math.round(kdaRatio * 100) / 100} KDA)`,
+                        kdaRatio: Math.round(kdaRatio * 100) / 100,
+                        highlight: `Most played: ${aram.mostPlayedChampion}`,
+                        championId: aram.mostPlayedChampion,
+                    });
                 }
             } catch (error) {
                 logger.error(`Failed to fetch stats for ${friend.discordName}`, error);
-                rows.push({
+                riftRows.push({
                     discordName: friend.discordName,
                     statusLabel: "ERROR",
                     record: "-",
@@ -107,18 +122,32 @@ export const dailyLeagueStats = onSchedule(
             }
         }
 
-        rows.sort((a, b) => {
-            if (b.winRate !== a.winRate) {
-                return b.winRate - a.winRate;
-            }
-            return b.kdaRatio - a.kdaRatio;
-        });
+        const sortRows = (rows: StatsCardRow[]) => {
+            rows.sort((a, b) => {
+                if (b.winRate !== a.winRate) {
+                    return b.winRate - a.winRate;
+                }
+                return b.kdaRatio - a.kdaRatio;
+            });
+        };
 
-        const imageBuffer = await generateStatsCard(rows);
+        sortRows(riftRows);
+        sortRows(aramRows);
+
+        const riftImage = await generateStatsCard(riftRows);
         await postImageToDiscord(
             discordWebhookUrl.value(),
-            imageBuffer,
-            "weekly-league-report.png"
+            riftImage,
+            "weekly-rift-report.png"
         );
+
+        if (aramRows.length > 0) {
+            const aramImage = await generateStatsCard(aramRows);
+            await postImageToDiscord(
+                discordWebhookUrl.value(),
+                aramImage,
+                "weekly-aram-report.png"
+            );
+        }
     }
 );
