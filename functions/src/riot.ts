@@ -109,7 +109,7 @@ export async function getMostRecentMatch(
 }
 
 const RIFT_QUEUE_IDS = [400, 420, 430, 440];
-const ARAM_QUEUE_IDS = [450, 2400];  // 450 = regular ARAM, 2400 = ARAM: Mayhem
+const ARAM_QUEUE_IDS = [450, 710];  // 450 = regular ARAM, 710 = ARAM: Mayhem
 
 export interface CategorizedStats {
     rift: RecentStatsSummary | null;
