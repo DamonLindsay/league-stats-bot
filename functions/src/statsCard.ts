@@ -89,10 +89,12 @@ export async function generateStatsCard(rows: StatsCardRow[]): Promise<Buffer> {
     const topRowIndex = rows.findIndex((r) => r.winRate === topWinRate && r.winRate > 0);
 
     // Find the worst performer by win rate, to highlight on the card.
+    // Skip entirely if everyone tied (e.g. everyone went undefeated).
     const worstWinRate = Math.min(...rows.map((r) => r.winRate));
-    const worstRowIndex = rows.findIndex(
-        (r, i) => r.winRate === worstWinRate && i !== topRowIndex
-    );
+    const allTied = topWinRate === worstWinRate;
+    const worstRowIndex = allTied
+        ? -1
+        : rows.findIndex((r, i) => r.winRate === worstWinRate && i !== topRowIndex);
 
     // Rows
     rows.forEach((row, index) => {
