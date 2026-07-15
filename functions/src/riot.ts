@@ -108,7 +108,7 @@ export async function getMostRecentMatch(
 }
 
 const RIFT_QUEUE_IDS = [400, 420, 430, 440];
-const ARAM_QUEUE_ID = 450;
+const ARAM_QUEUE_IDS = [450, 2400];  // 450 = regular ARAM, 2400 = ARAM: Mayhem
 
 export interface CategorizedStats {
     rift: RecentStatsSummary | null;
@@ -171,7 +171,7 @@ export async function getRecentStats(
 
         if (RIFT_QUEUE_IDS.includes(queueId)) {
             riftParticipants.push(participant);
-        } else if (queueId === ARAM_QUEUE_ID) {
+        } else if (ARAM_QUEUE_IDS.includes(queueId)) {
             aramParticipants.push(participant);
         }
         // Other queue types go here (e.g. ARAM: Mayhem, Arena) are intentionally
