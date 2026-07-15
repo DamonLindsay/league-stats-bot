@@ -46,7 +46,7 @@ async function getDdragonVersion(): Promise<string> {
  * Renders a dark, scoreboard-style PNG summarizing each player's stats.
  * Returns a PNG buffer ready to be uploaded as a Discord attachment.
  */
-export async function generateStatsCard(rows: StatsCardRow[]): Promise<Buffer> {
+export async function generateStatsCard(rows: StatsCardRow[], title: string): Promise<Buffer> {
     const version = await getDdragonVersion();
 
     // Preload all champion icons first, since image loading is async
@@ -78,7 +78,7 @@ export async function generateStatsCard(rows: StatsCardRow[]): Promise<Buffer> {
     // Header
     ctx.fillStyle = "#e6c88c";
     ctx.font = "bold 40px Oswald";
-    ctx.fillText("WEEKLY LEAGUE REPORT", PADDING, 65);
+    ctx.fillText(title, PADDING, 65);
 
     ctx.fillStyle = "#8b949e";
     ctx.font = "20px Oswald";
