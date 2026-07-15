@@ -1,4 +1,5 @@
 import axios from "axios";
+import * as logger from "firebase-functions/logger";
 
 interface RiotAccount {
     puuid: string;
@@ -148,6 +149,8 @@ export async function getRecentStats(
     });
 
     const matchIds = idsResponse.data;
+    
+    logger.info(`Found ${matchIds.length} total matches for puuid ${puuid}`);
 
     const riftParticipants: MatchParticipant[] = [];
     const aramParticipants: MatchParticipant[] = [];
@@ -168,6 +171,8 @@ export async function getRecentStats(
         }
 
         const queueId = matchResponse.data.info.queueId;
+
+        logger.info(`Match ${matchId} has queueID ${queueId}`);
 
         if (RIFT_QUEUE_IDS.includes(queueId)) {
             riftParticipants.push(participant);
