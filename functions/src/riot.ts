@@ -107,6 +107,14 @@ export async function getMostRecentMatch(
     return participant ?? null;
 }
 
+const RIFT_QUEUE_IDS = [400, 420, 430, 440];
+const ARAM_QUEUE_ID = 450;
+
+export interface CategorizedStats {
+    rift: RecentStatsSummary | null;
+    aram: RecentStatsSummary | null;
+}
+
 export interface RecentStatsSummary {
     gamesPlayed: number;
     wins: number;
@@ -119,17 +127,18 @@ export interface RecentStatsSummary {
 }
 
 /**
- * Aggregates a player's match history over the last N days: win rate,
- * average KDA, and most-played champion.  Uses Match-V56's startTime
- * filter to only fetch match IDs within the window server-side, rather
- * than fetching everything and discording old matches client side.
+ * Aggregates a player's match history over the last N days, split into
+ * two categories: Summoners Rift (normals + ranked combined) and ARAM.
+ * Categorization happens client-side using each match's queueID, since
+ * Riot's queue filter only accepts one queue per API call and we don't
+ * want to fetch the match list twice.
  */
 export async function getRecentStats(
     puuid: string,
     regionalCluster: string,
     apiKey: string,
     days: number
-): Promise<RecentStatsSummary | null> {
+): Promise<CategorizedStats> {
     const startTime = Math.floor(Date.now() / 1000) - days * 24 * 60 * 60;
 
     const idsUrl = `https://${regionalCluster}.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids?startTime=${startTime}&count=100`;
@@ -140,11 +149,8 @@ export async function getRecentStats(
 
     const matchIds = idsResponse.data;
 
-    if (matchIds.length === 0) {
-        return null;
-    }
-
-    const participants: MatchParticipant[] = [];
+    const riftParticipants: MatchParticipant[] = [];
+    const aramParticipants: MatchParticipant[] = [];
 
     for (const matchId of matchIds) {
         const matchUrl = `https://${regionalCluster}.api.riotgames.com/lol/match/v5/matches/${matchId}`;
@@ -157,11 +163,28 @@ export async function getRecentStats(
             (p) => p.puuid === puuid
         );
 
-        if (participant) {
-            participants.push(participant);
+        if (!participant) {
+            continue;
         }
+
+        const queueId = matchResponse.data.info.queueId;
+
+        if (RIFT_QUEUE_IDS.includes(queueId)) {
+            riftParticipants.push(participant);
+        } else if (queueId === ARAM_QUEUE_ID) {
+            aramParticipants.push(participant);
+        }
+        // Other queue types go here (e.g. ARAM: Mayhem, Arena) are intentionally
+        // not categorized here - not currently supported by this bot.
     }
 
+    return {
+        rift: summarize(riftParticipants),
+        aram: summarize(aramParticipants),
+    };
+}
+
+function summarize(participants: MatchParticipant[]): RecentStatsSummary | null {
     if (participants.length === 0) {
         return null;
     }
