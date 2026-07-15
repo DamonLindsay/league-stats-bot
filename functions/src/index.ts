@@ -76,7 +76,7 @@ export const dailyLeagueStats = onSchedule(
                             statusLabel: `LAST 7 DAYS · ${stats.gamesPlayed} GAMES`,
                             record: `${stats.wins}W - ${stats.losses}L`,
                             winRate: stats.winRate,
-                            kda: `${stats.avgKills} / ${stats.avgDeaths} / ${stats.avgAssists}`,
+                            kda: `${stats.avgKills} / ${stats.avgDeaths} / ${stats.avgAssists} (${Math.round(kdaRatio * 100) / 100} KDA)`,
                             kdaRatio: Math.round(kdaRatio * 100) / 100,
                             highlight: `Most played: ${stats.mostPlayedChampion}`,
                             championId: stats.mostPlayedChampion,
