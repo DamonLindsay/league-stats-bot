@@ -1,6 +1,10 @@
 import axios from "axios";
 import * as logger from "firebase-functions/logger";
 
+function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 interface RiotAccount {
     puuid: string;
     gameName: string;
@@ -173,6 +177,8 @@ export async function getRecentStats(
     const aramParticipants: MatchParticipant[] = [];
 
     for (const matchId of matchIds) {
+        await sleep(100);
+
         const matchUrl = `https://${regionalCluster}.api.riotgames.com/lol/match/v5/matches/${matchId}`;
 
         const matchResponse = await axios.get<MatchInfo>(matchUrl, {
