@@ -170,12 +170,12 @@ const RANKED_QUEUE_IDS = [
     QUEUE_RANKED_5S_LIMITED,
 ];
 
-const LADDER_BASE_WIN = 12;
-const LADDER_BASE_LOSS = -6;
-const LADDER_STREAK_BONUS_PER_GAME = 2;
-const LADDER_STREAK_BONUS_CAP = 10;
-const LADDER_SLUMP_PENALTY_PER_GAME = 1;
-const LADDER_SLUMP_PENALTY_CAP = 5;
+const LADDER_BASE_WIN = 10;
+const LADDER_BASE_LOSS = 3;
+const LADDER_WIN_STREAK_BONUS_PER_GAME = 2;
+const LADDER_WIN_STREAK_BONUS_CAP = 10;
+const LADDER_LOSS_STREAK_PENALTY_PER_GAME = 1;
+const LADDER_LOSS_STREAK_PENALTY_CAP = 3;
 const LADDER_KDA_MODIFIER_CAP = 6;
 
 /**
@@ -195,9 +195,11 @@ function ladderJitter(matchId: string, puuid: string): number {
 
 /**
  * Scores a single ranked match's contribution to Ladder Points: a base
- * win/loss value, a streak bonus/slump penalty based on consecutive results
- * up to and including this game, a modifier from that game's KDA, and a
- * small hidden jitter so the formula can't be reverse-engineered exactly.
+ * win/loss value, a bonus for win streaks (or a shrink for loss streaks), a
+ * modifier from that game's KDA, and a small hidden jitter so the formula
+ * can't be reverse-engineered exactly. Every match contributes zero or more
+ * points - never negative - so a player's weekly total can only ever climb,
+ * with losses and bad games simply adding less than wins and good ones.
  */
 function scoreLadderMatch(
     matchId: string,
@@ -207,9 +209,9 @@ function scoreLadderMatch(
 ): number {
     const base = result.win ? LADDER_BASE_WIN : LADDER_BASE_LOSS;
 
-    const streakBonus = result.win
-        ? Math.min(LADDER_STREAK_BONUS_PER_GAME * (currentStreak - 1), LADDER_STREAK_BONUS_CAP)
-        : -Math.min(LADDER_SLUMP_PENALTY_PER_GAME * (currentStreak - 1), LADDER_SLUMP_PENALTY_CAP);
+    const streakAdjustment = result.win
+        ? Math.min(LADDER_WIN_STREAK_BONUS_PER_GAME * (currentStreak - 1), LADDER_WIN_STREAK_BONUS_CAP)
+        : -Math.min(LADDER_LOSS_STREAK_PENALTY_PER_GAME * (currentStreak - 1), LADDER_LOSS_STREAK_PENALTY_CAP);
 
     const kda = result.deaths === 0
         ? result.kills + result.assists
@@ -221,7 +223,7 @@ function scoreLadderMatch(
 
     const jitter = ladderJitter(matchId, puuid);
 
-    return base + streakBonus + kdaModifier + jitter;
+    return Math.max(0, base + streakAdjustment + kdaModifier + jitter);
 }
 
 export interface RecentStatsSummary {

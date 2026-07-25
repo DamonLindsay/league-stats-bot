@@ -144,7 +144,19 @@ export const dailyLeagueStats = onSchedule(
             });
         };
 
-        sortRows(riftRows);
+        // Rift card ranks by Ladder Points first, since that's the whole
+        // point of the ladder, falling back to win rate then KDA to break ties.
+        riftRows.sort((a, b) => {
+            const bPoints = b.ladderPoints ?? 0;
+            const aPoints = a.ladderPoints ?? 0;
+            if (bPoints !== aPoints) {
+                return bPoints - aPoints;
+            }
+            if (b.winRate !== a.winRate) {
+                return b.winRate - a.winRate;
+            }
+            return b.kdaRatio - a.kdaRatio;
+        });
         sortRows(aramRows);
 
         const riftImage = await generateStatsCard(riftRows, "SUMMONER'S RIFT REPORT");

@@ -211,11 +211,10 @@ export async function generateStatsCard(rows: StatsCardRow[], title: string): Pr
 
         // Ladder Points (ranked play only - absent for ARAM rows)
         if (row.ladderPoints !== undefined) {
-            ctx.fillStyle = row.ladderPoints >= 0 ? "#e6c88c" : "#f85149";
-            const sign = row.ladderPoints >= 0 ? "+" : "";
+            ctx.fillStyle = "#e6c88c";
             fillTextLeftAligned(
                 ctx,
-                `Ladder Points: ${sign}${row.ladderPoints}`,
+                `Ladder Points: ${row.ladderPoints}`,
                 PADDING + 350,
                 y + 96,
                 18,
