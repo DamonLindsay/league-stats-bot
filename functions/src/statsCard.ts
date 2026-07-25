@@ -67,6 +67,39 @@ function fillTextRightAligned(
     ctx.fillText(text, rightEdge - width, y);
 }
 
+interface Badge {
+    label: string;
+    color: string;
+}
+
+/**
+ * Draws a row of colored badge labels left-to-right, shrinking the shared
+ * font size (down to a floor) so any combination of titles a player earns
+ * still fits without spilling into the record/KDA column.
+ */
+function fillBadgeRow(ctx: SKRSContext2D, badges: Badge[], x: number, y: number, maxWidth: number): void {
+    if (badges.length === 0) {
+        return;
+    }
+
+    const gap = 12;
+    let size = 18;
+    const totalWidth = () => {
+        ctx.font = `bold ${size}px Oswald`;
+        return badges.reduce((sum, b) => sum + ctx.measureText(b.label).width, 0) + gap * (badges.length - 1);
+    };
+    while (totalWidth() > maxWidth && size > 11) {
+        size -= 1;
+    }
+
+    let cursorX = x;
+    for (const badge of badges) {
+        ctx.fillStyle = badge.color;
+        ctx.fillText(badge.label, cursorX, y);
+        cursorX += ctx.measureText(badge.label).width + gap;
+    }
+}
+
 let cachedVersion: string | null = null;
 
 /**
@@ -128,37 +161,52 @@ export async function generateStatsCard(rows: StatsCardRow[], title: string): Pr
     ctx.font = "20px Oswald";
     ctx.fillText("Last 7 Days", PADDING, 95);
 
-    // Top/worst performer are only drawn from players who actually played a
-    // game this week - someone with 0 games hasn't performed, well or badly.
+    // Highest/lowest win rate badges are only drawn from players who actually
+    // played a game this week - someone with 0 games hasn't performed, well or badly.
     const playedRows = rows.filter((r) => r.gamesPlayed > 0);
 
     const topWinRate = playedRows.length > 0
         ? Math.max(...playedRows.map((r) => r.winRate))
         : -1;
-    const topRowIndex = rows.findIndex(
+    const highestWinRateRowIndex = rows.findIndex(
         (r) => r.gamesPlayed > 0 && r.winRate === topWinRate && r.winRate > 0
     );
 
-    // Skip the worst performer entirely if everyone tied (e.g. everyone went undefeated).
+    // Skip the lowest win rate badge entirely if everyone tied (e.g. everyone went undefeated).
     const worstWinRate = playedRows.length > 0
         ? Math.min(...playedRows.map((r) => r.winRate))
         : -1;
     const allTied = topWinRate === worstWinRate;
-    const worstRowIndex = allTied
+    const lowestWinRateRowIndex = allTied
         ? -1
-        : rows.findIndex((r, i) => r.gamesPlayed > 0 && r.winRate === worstWinRate && i !== topRowIndex);
+        : rows.findIndex((r, i) => r.gamesPlayed > 0 && r.winRate === worstWinRate && i !== highestWinRateRowIndex);
+
+    // Ladder Hero goes to whoever earned the most Ladder Points this week -
+    // only applies to cards that carry that field (the Rift card), and only
+    // if someone actually earned points (nobody gets crowned for a flat 0).
+    const rowsWithLadderPoints = rows.filter((r) => r.ladderPoints !== undefined);
+    const maxLadderPoints = rowsWithLadderPoints.length > 0
+        ? Math.max(...rowsWithLadderPoints.map((r) => r.ladderPoints as number))
+        : -1;
+    const ladderHeroRowIndex = maxLadderPoints > 0
+        ? rows.findIndex((r) => r.ladderPoints === maxLadderPoints)
+        : -1;
 
     // Rows
     rows.forEach((row, index) => {
         const y = HEADER_HEIGHT + index * ROW_HEIGHT;
         const accentColor = row.winRate >= 50 ? "#3fb950" : "#f85149";
 
-        // Row background
-        const isTopPerformer = index === topRowIndex;
-        const isWorstPerformer = index === worstRowIndex;
-        ctx.fillStyle = isTopPerformer
+        // Row background - Ladder Hero takes visual priority since it's the
+        // headline title, then highest/lowest win rate, then the normal stripe.
+        const isLadderHero = index === ladderHeroRowIndex;
+        const isHighestWinRate = index === highestWinRateRowIndex;
+        const isLowestWinRate = index === lowestWinRateRowIndex;
+        ctx.fillStyle = isLadderHero
+            ? "#241a33"
+            : isHighestWinRate
             ? "#2d2411"
-            : isWorstPerformer
+            : isLowestWinRate
             ? "#2d1111"
             : index % 2 === 0
             ? "#161b22"
@@ -166,7 +214,13 @@ export async function generateStatsCard(rows: StatsCardRow[], title: string): Pr
         ctx.fillRect(PADDING, y, WIDTH - PADDING * 2, ROW_HEIGHT - 10)
 
         // Accent bar
-        ctx.fillStyle = isTopPerformer ? "#ffd700" : isWorstPerformer ? "#ff4444" : accentColor;
+        ctx.fillStyle = isLadderHero
+            ? "#d2a8ff"
+            : isHighestWinRate
+            ? "#ffd700"
+            : isLowestWinRate
+            ? "#ff4444"
+            : accentColor;
         ctx.fillRect(PADDING, y, 6, ROW_HEIGHT - 10);
 
         // Champion Icon
@@ -182,24 +236,25 @@ export async function generateStatsCard(rows: StatsCardRow[], title: string): Pr
         ctx.font = "bold 26px Oswald";
         ctx.fillText(row.discordName, PADDING + 30, y + 35);
 
-        if (isTopPerformer) {
-            const nameWidth = ctx.measureText(row.discordName).width;
-            ctx.fillStyle = "#ffd700";
-            ctx.font = "bold 20px Oswald";
-            ctx.fillText("TOP PERFORMER", PADDING + 30 + nameWidth + 15, y + 35)
-        }
-
-        if (isWorstPerformer) {
-            const nameWidth = ctx.measureText(row.discordName).width;
-            ctx.fillStyle = "#ff4444";
-            ctx.font = "bold 20px Oswald";
-            ctx.fillText("WORST PERFORMER", PADDING + 30 + nameWidth + 15, y + 35)
-        }
-
         // Status label
         ctx.fillStyle = "#8b949e";
         ctx.font = "16px Oswald";
         ctx.fillText(row.statusLabel, PADDING + 30, y + 60);
+
+        // Badges (a player can hold more than one title at once, e.g. Ladder
+        // Hero and Highest Win Rate) - drawn on their own line so they never
+        // have to compete with the name for space.
+        const badges: Badge[] = [];
+        if (isLadderHero) {
+            badges.push({ label: "LADDER HERO", color: "#d2a8ff" });
+        }
+        if (isHighestWinRate) {
+            badges.push({ label: "HIGHEST WIN RATE", color: "#ffd700" });
+        }
+        if (isLowestWinRate) {
+            badges.push({ label: "LOWEST WIN RATE", color: "#ff4444" });
+        }
+        fillBadgeRow(ctx, badges, PADDING + 30, y + 90, 300);
 
         // Record + win rate
         ctx.fillStyle = accentColor;
