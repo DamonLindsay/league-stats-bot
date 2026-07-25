@@ -5,6 +5,42 @@ function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Riot's personal API key allows 100 requests per 2 minutes app-wide. Pacing
+// every request (account lookups, rank lookups, match IDs, match details -
+// not just the match detail loop) to at least this far apart keeps the whole
+// run under that limit; 429s are also retried as a safety net.
+const RIOT_MIN_REQUEST_INTERVAL_MS = 1300;
+const RIOT_MAX_RETRIES = 3;
+let lastRiotRequestAt = 0;
+
+async function riotGet<T>(url: string, apiKey: string, attempt = 0): Promise<T> {
+    const wait = RIOT_MIN_REQUEST_INTERVAL_MS - (Date.now() - lastRiotRequestAt);
+    if (wait > 0) {
+        await sleep(wait);
+    }
+
+    try {
+        const response = await axios.get<T>(url, {
+            headers: { "X-Riot-Token": apiKey },
+        });
+        return response.data;
+    } catch (error) {
+        if (
+            axios.isAxiosError(error) &&
+            error.response?.status === 429 &&
+            attempt < RIOT_MAX_RETRIES
+        ) {
+            const retryAfterSeconds = Number(error.response.headers["retry-after"]) || 5;
+            logger.info(`Rate limited by Riot API, retrying in ${retryAfterSeconds}s`);
+            await sleep(retryAfterSeconds * 1000);
+            return riotGet<T>(url, apiKey, attempt + 1);
+        }
+        throw error;
+    } finally {
+        lastRiotRequestAt = Date.now();
+    }
+}
+
 interface RiotAccount {
     puuid: string;
     gameName: string;
@@ -35,11 +71,9 @@ export async function getPuuid(
       gameName
     )}/${encodeURIComponent(tagLine)}`;
 
-    const response = await axios.get<RiotAccount>(url, {
-        headers: { "X-Riot-Token": apiKey },
-    });
+    const account = await riotGet<RiotAccount>(url, apiKey);
 
-    return response.data.puuid;
+    return account.puuid;
 }
 
 /**
@@ -54,11 +88,7 @@ export async function getRankByPuuid(
 ): Promise<RankEntry[]> {
     const url = `https://${platform}.api.riotgames.com/lol/league/v4/entries/by-puuid/${puuid}`;
 
-    const response = await axios.get<RankEntry[]>(url, {
-        headers: { "X-Riot-Token": apiKey }
-    });
-
-    return response.data;
+    return riotGet<RankEntry[]>(url, apiKey);
 }
 
 interface MatchParticipant {
@@ -90,22 +120,18 @@ export async function getMostRecentMatch(
 ): Promise<MatchParticipant | null> {
     const idsUrl = `https://${regionalCluster}.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids?count=1`;
 
-    const idsResponse = await axios.get<string[]>(idsUrl, {
-        headers: { "X-Riot-Token": apiKey },
-    });
+    const matchIds = await riotGet<string[]>(idsUrl, apiKey);
 
-    if (idsResponse.data.length === 0) {
+    if (matchIds.length === 0) {
         return null;
     }
 
-    const matchId = idsResponse.data[0];
+    const matchId = matchIds[0];
     const matchUrl = `https://${regionalCluster}.api.riotgames.com/lol/match/v5/matches/${matchId}`;
 
-    const matchResponse = await axios.get<MatchInfo>(matchUrl, {
-        headers: { "X-Riot-Token": apiKey },
-    });
+    const match = await riotGet<MatchInfo>(matchUrl, apiKey);
 
-    const participant = matchResponse.data.info.participants.find(
+    const participant = match.info.participants.find(
         (p) => p.puuid === puuid
     );
 
@@ -226,12 +252,8 @@ export async function getRecentStats(
 
     const idsUrl = `https://${regionalCluster}.api.riotgames.com/lol/match/v5/matches/by-puuid/${puuid}/ids?startTime=${startTime}&count=100`;
 
-    const idsResponse = await axios.get<string[]>(idsUrl, {
-        headers: { "X-Riot-Token": apiKey },
-    });
+    const matchIds = await riotGet<string[]>(idsUrl, apiKey);
 
-    const matchIds = idsResponse.data;
-    
     logger.info(`Found ${matchIds.length} total matches for puuid ${puuid}`);
 
     const riftParticipants: MatchParticipant[] = [];
@@ -241,15 +263,11 @@ export async function getRecentStats(
     const rankedMatches: { matchId: string; participant: MatchParticipant }[] = [];
 
     for (const matchId of matchIds) {
-        await sleep(100);
-
         const matchUrl = `https://${regionalCluster}.api.riotgames.com/lol/match/v5/matches/${matchId}`;
 
-        const matchResponse = await axios.get<MatchInfo>(matchUrl, {
-            headers: { "X-Riot-Token": apiKey },
-        });
+        const match = await riotGet<MatchInfo>(matchUrl, apiKey);
 
-        const participant = matchResponse.data.info.participants.find(
+        const participant = match.info.participants.find(
             (p) => p.puuid === puuid
         );
 
@@ -257,7 +275,7 @@ export async function getRecentStats(
             continue;
         }
 
-        const queueId = matchResponse.data.info.queueId;
+        const queueId = match.info.queueId;
 
         logger.info(`Match ${matchId} has queueID ${queueId}`);
 
