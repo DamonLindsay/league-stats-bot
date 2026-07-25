@@ -47,12 +47,16 @@ export const dailyLeagueStats = onSchedule(
                     (r) => r.queueType === "RANKED_SOLO_5x5"
                 );
 
-                const { rift, aram } = await getRecentStats(
+                const { rift, aram, ladderPoints } = await getRecentStats(
                     puuid,
                     friend.matchRegionalCluster,
                     riotApiKey.value(),
                     7
                 );
+
+                const rankLabel = soloQueue
+                    ? `${soloQueue.tier} ${soloQueue.rank} (${soloQueue.leaguePoints} LP)`
+                    : undefined;
 
                 // Rift row - always built, even with no recent games,
                 // since it's the "main" card everyone appears on.
@@ -61,10 +65,6 @@ export const dailyLeagueStats = onSchedule(
                         ? rift.avgKills + rift.avgAssists
                         : (rift.avgKills + rift.avgAssists) / rift.avgDeaths;
 
-                    const rankSuffix = soloQueue
-                        ? ` . ${soloQueue.tier} ${soloQueue.rank} (${soloQueue.leaguePoints} LP)`
-                        : "";
-
                     riftRows.push({
                         discordName: friend.discordName,
                         statusLabel: `LAST 7 DAYS · ${rift.gamesPlayed} GAMES`,
@@ -72,8 +72,11 @@ export const dailyLeagueStats = onSchedule(
                         winRate: rift.winRate,
                         kda: `${rift.avgKills} / ${rift.avgDeaths} / ${rift.avgAssists} (${Math.round(kdaRatio * 100) / 100} KDA)`,
                         kdaRatio: Math.round(kdaRatio * 100) / 100,
-                        highlight: `Most played: ${rift.mostPlayedChampion}${rankSuffix}`,
+                        gamesPlayed: rift.gamesPlayed,
+                        rankLabel,
+                        championLabel: `Most played: ${rift.mostPlayedChampion}`,
                         championId: rift.mostPlayedChampion,
+                        ladderPoints: ladderPoints ?? undefined,
                     });
                 } else {
                     riftRows.push({
@@ -83,9 +86,10 @@ export const dailyLeagueStats = onSchedule(
                         winRate: 0,
                         kda: "-",
                         kdaRatio: 0,
-                        highlight: soloQueue
-                            ? `${soloQueue.tier} ${soloQueue.rank} (${soloQueue.leaguePoints} LP)`
-                            : "No games played",
+                        gamesPlayed: 0,
+                        rankLabel,
+                        championLabel: "No games played",
+                        ladderPoints: ladderPoints ?? undefined,
                     });
                 }
 
@@ -104,7 +108,8 @@ export const dailyLeagueStats = onSchedule(
                         winRate: aram.winRate,
                         kda: `${aram.avgKills} / ${aram.avgDeaths} / ${aram.avgAssists} (${Math.round(kdaRatio * 100) / 100} KDA)`,
                         kdaRatio: Math.round(kdaRatio * 100) / 100,
-                        highlight: `Most played: ${aram.mostPlayedChampion}`,
+                        gamesPlayed: aram.gamesPlayed,
+                        championLabel: `Most played: ${aram.mostPlayedChampion}`,
                         championId: aram.mostPlayedChampion,
                     });
                 }
@@ -117,7 +122,8 @@ export const dailyLeagueStats = onSchedule(
                     winRate: 0,
                     kda: "-",
                     kdaRatio: 0,
-                    highlight: "Couldn't fetch stats",
+                    gamesPlayed: 0,
+                    championLabel: "Couldn't fetch stats",
                 });
             }
         }

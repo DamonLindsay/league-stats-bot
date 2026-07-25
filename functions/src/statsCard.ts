@@ -1,4 +1,4 @@
-import { createCanvas, loadImage, GlobalFonts } from "@napi-rs/canvas";
+import { createCanvas, loadImage, GlobalFonts, SKRSContext2D } from "@napi-rs/canvas";
 import axios from "axios";
 import * as path from "path";
 
@@ -14,14 +14,58 @@ export interface StatsCardRow {
     winRate: number; // 0-100, drives the accent color
     kda: string; // e.g. "9-0 / 4.1 / 6.4"
     kdaRatio: number; // numeric (kills + assists) / deaths, used for sort tiebreaking
-    highlight: string; //e.g. "GOLD II - 45 LP" or "Most played: Nasus"
+    gamesPlayed: number; // used to exclude 0-game rows from top/worst performer
+    rankLabel?: string; // e.g. "GOLD II - 45 LP", shown above championLabel
+    championLabel: string; // e.g. "Most played: Nasus" or "No games played"
     championId?: string; // e.g. "Nasus" - used to fetch the champion icon
+    ladderPoints?: number; // this week's Ladder Points total from ranked play, if any were earned
 }
 
 const WIDTH = 1000;
 const HEADER_HEIGHT = 130;
-const ROW_HEIGHT = 100;
+const ROW_HEIGHT = 116;
 const PADDING = 30;
+const LEFT_COL_MAX_WIDTH = 250; // reserved width for record/KDA text
+const RIGHT_COL_MAX_WIDTH = 220; // reserved width for rank/champion text
+// These two columns are given fixed, non-overlapping widths so neither a long
+// rank/champion string nor an inflated KDA can grow into the other's space.
+
+function shrinkFontToFit(ctx: SKRSContext2D, text: string, fontSize: number, maxWidth: number): number {
+    let size = fontSize;
+    ctx.font = `bold ${size}px Oswald`;
+    while (ctx.measureText(text).width > maxWidth && size > 12) {
+        size -= 2;
+        ctx.font = `bold ${size}px Oswald`;
+    }
+    return size;
+}
+
+/** Draws left-aligned text, shrinking the font so it can't overrun maxWidth. */
+function fillTextLeftAligned(
+    ctx: SKRSContext2D,
+    text: string,
+    x: number,
+    y: number,
+    fontSize: number,
+    maxWidth: number
+): void {
+    shrinkFontToFit(ctx, text, fontSize, maxWidth);
+    ctx.fillText(text, x, y);
+}
+
+/** Draws right-aligned text, shrinking the font so it can't overrun maxWidth. */
+function fillTextRightAligned(
+    ctx: SKRSContext2D,
+    text: string,
+    rightEdge: number,
+    y: number,
+    fontSize: number,
+    maxWidth: number
+): void {
+    shrinkFontToFit(ctx, text, fontSize, maxWidth);
+    const width = ctx.measureText(text).width;
+    ctx.fillText(text, rightEdge - width, y);
+}
 
 let cachedVersion: string | null = null;
 
@@ -84,17 +128,25 @@ export async function generateStatsCard(rows: StatsCardRow[], title: string): Pr
     ctx.font = "20px Oswald";
     ctx.fillText("Last 7 Days", PADDING, 95);
 
-    // Find the top performer by win rate, to highlight on the card.
-    const topWinRate = Math.max(...rows.map((r) => r.winRate));
-    const topRowIndex = rows.findIndex((r) => r.winRate === topWinRate && r.winRate > 0);
+    // Top/worst performer are only drawn from players who actually played a
+    // game this week - someone with 0 games hasn't performed, well or badly.
+    const playedRows = rows.filter((r) => r.gamesPlayed > 0);
 
-    // Find the worst performer by win rate, to highlight on the card.
-    // Skip entirely if everyone tied (e.g. everyone went undefeated).
-    const worstWinRate = Math.min(...rows.map((r) => r.winRate));
+    const topWinRate = playedRows.length > 0
+        ? Math.max(...playedRows.map((r) => r.winRate))
+        : -1;
+    const topRowIndex = rows.findIndex(
+        (r) => r.gamesPlayed > 0 && r.winRate === topWinRate && r.winRate > 0
+    );
+
+    // Skip the worst performer entirely if everyone tied (e.g. everyone went undefeated).
+    const worstWinRate = playedRows.length > 0
+        ? Math.min(...playedRows.map((r) => r.winRate))
+        : -1;
     const allTied = topWinRate === worstWinRate;
     const worstRowIndex = allTied
         ? -1
-        : rows.findIndex((r, i) => r.winRate === worstWinRate && i !== topRowIndex);
+        : rows.findIndex((r, i) => r.gamesPlayed > 0 && r.winRate === worstWinRate && i !== topRowIndex);
 
     // Rows
     rows.forEach((row, index) => {
@@ -151,20 +203,37 @@ export async function generateStatsCard(rows: StatsCardRow[], title: string): Pr
 
         // Record + win rate
         ctx.fillStyle = accentColor;
-        ctx.font = "bold 24px Oswald";
-        ctx.fillText(`${row.record} (${row.winRate}%)`, PADDING + 350, y + 40);
+        fillTextLeftAligned(ctx, `${row.record} (${row.winRate}%)`, PADDING + 350, y + 40, 24, LEFT_COL_MAX_WIDTH);
 
         // KDA
         ctx.fillStyle = "#c9d1d9";
-        ctx.font = "20px Oswald";
-        ctx.fillText(`KDA: ${row.kda}`, PADDING + 350, y + 70);
+        fillTextLeftAligned(ctx, `KDA: ${row.kda}`, PADDING + 350, y + 70, 20, LEFT_COL_MAX_WIDTH);
 
-        //Highlight (right-aligned, shifted left if there's an icon)
-        const highlightRightEdge = icon ? WIDTH - PADDING - 20 - 64 - 15: WIDTH - PADDING - 20;
+        // Ladder Points (ranked play only - absent for ARAM rows)
+        if (row.ladderPoints !== undefined) {
+            ctx.fillStyle = row.ladderPoints >= 0 ? "#e6c88c" : "#f85149";
+            const sign = row.ladderPoints >= 0 ? "+" : "";
+            fillTextLeftAligned(
+                ctx,
+                `Ladder Points: ${sign}${row.ladderPoints}`,
+                PADDING + 350,
+                y + 96,
+                18,
+                LEFT_COL_MAX_WIDTH
+            );
+        }
+
+        // Rank + champion (right-aligned, shifted left if there's an icon,
+        // font auto-shrinks per line so long strings can't grow into the
+        // record/KDA column)
+        const rightEdge = icon ? WIDTH - PADDING - 20 - 64 - 15 : WIDTH - PADDING - 20;
         ctx.fillStyle = "#e6c88c";
-        ctx.font = "bold 20px Oswald";
-        const highlightWidth = ctx.measureText(row.highlight).width;
-        ctx.fillText(row.highlight, highlightRightEdge - highlightWidth, y + 50);
+        if (row.rankLabel) {
+            fillTextRightAligned(ctx, row.rankLabel, rightEdge, y + 35, 18, RIGHT_COL_MAX_WIDTH);
+            fillTextRightAligned(ctx, row.championLabel, rightEdge, y + 60, 18, RIGHT_COL_MAX_WIDTH);
+        } else {
+            fillTextRightAligned(ctx, row.championLabel, rightEdge, y + 50, 20, RIGHT_COL_MAX_WIDTH);
+        }
     });
 
     return canvas.toBuffer("image/png")

@@ -135,6 +135,67 @@ const ARAM_QUEUE_IDS = [
 export interface CategorizedStats {
     rift: RecentStatsSummary | null;
     aram: RecentStatsSummary | null;
+    ladderPoints: number | null; // null if no ranked games were played this week
+}
+
+const RANKED_QUEUE_IDS = [
+    QUEUE_RANKED_SOLO_DUO,
+    QUEUE_RANKED_FLEX,
+    QUEUE_RANKED_5S_LIMITED,
+];
+
+const LADDER_BASE_WIN = 12;
+const LADDER_BASE_LOSS = -6;
+const LADDER_STREAK_BONUS_PER_GAME = 2;
+const LADDER_STREAK_BONUS_CAP = 10;
+const LADDER_SLUMP_PENALTY_PER_GAME = 1;
+const LADDER_SLUMP_PENALTY_CAP = 5;
+const LADDER_KDA_MODIFIER_CAP = 6;
+
+/**
+ * Deterministic pseudo-random offset in [-3, 3], seeded from the match and
+ * player. Keeps per-game Ladder Points from being back-solvable as a clean
+ * linear formula from the public win/loss + KDA numbers, without making the
+ * total feel random from one week to the next.
+ */
+function ladderJitter(matchId: string, puuid: string): number {
+    let hash = 0;
+    const seed = matchId + puuid;
+    for (let i = 0; i < seed.length; i++) {
+        hash = (hash * 31 + seed.charCodeAt(i)) | 0;
+    }
+    return (Math.abs(hash) % 7) - 3;
+}
+
+/**
+ * Scores a single ranked match's contribution to Ladder Points: a base
+ * win/loss value, a streak bonus/slump penalty based on consecutive results
+ * up to and including this game, a modifier from that game's KDA, and a
+ * small hidden jitter so the formula can't be reverse-engineered exactly.
+ */
+function scoreLadderMatch(
+    matchId: string,
+    puuid: string,
+    result: MatchParticipant,
+    currentStreak: number
+): number {
+    const base = result.win ? LADDER_BASE_WIN : LADDER_BASE_LOSS;
+
+    const streakBonus = result.win
+        ? Math.min(LADDER_STREAK_BONUS_PER_GAME * (currentStreak - 1), LADDER_STREAK_BONUS_CAP)
+        : -Math.min(LADDER_SLUMP_PENALTY_PER_GAME * (currentStreak - 1), LADDER_SLUMP_PENALTY_CAP);
+
+    const kda = result.deaths === 0
+        ? result.kills + result.assists
+        : (result.kills + result.assists) / result.deaths;
+    const kdaModifier = Math.max(
+        -LADDER_KDA_MODIFIER_CAP,
+        Math.min(LADDER_KDA_MODIFIER_CAP, Math.round((kda - 3) * 1.5))
+    );
+
+    const jitter = ladderJitter(matchId, puuid);
+
+    return base + streakBonus + kdaModifier + jitter;
 }
 
 export interface RecentStatsSummary {
@@ -175,6 +236,9 @@ export async function getRecentStats(
 
     const riftParticipants: MatchParticipant[] = [];
     const aramParticipants: MatchParticipant[] = [];
+    // Match IDs come back most-recent-first; kept in that order here and
+    // reversed later so streaks can be computed oldest-to-newest.
+    const rankedMatches: { matchId: string; participant: MatchParticipant }[] = [];
 
     for (const matchId of matchIds) {
         await sleep(100);
@@ -204,11 +268,32 @@ export async function getRecentStats(
         }
         // Other queue types go here (e.g. ARAM: Mayhem, Arena) are intentionally
         // not categorized here - not currently supported by this bot.
+
+        if (RANKED_QUEUE_IDS.includes(queueId)) {
+            rankedMatches.push({ matchId, participant });
+        }
+    }
+
+    let ladderPoints: number | null = null;
+    if (rankedMatches.length > 0) {
+        ladderPoints = 0;
+        let streak = 0; // positive = win streak, negative = loss streak
+
+        // Reverse to oldest-first so streaks accumulate in the order the
+        // games were actually played.
+        for (const { matchId, participant } of [...rankedMatches].reverse()) {
+            streak = participant.win
+                ? (streak > 0 ? streak + 1 : 1)
+                : (streak < 0 ? streak - 1 : -1);
+
+            ladderPoints += scoreLadderMatch(matchId, puuid, participant, Math.abs(streak));
+        }
     }
 
     return {
         rift: summarize(riftParticipants),
         aram: summarize(aramParticipants),
+        ladderPoints,
     };
 }
 

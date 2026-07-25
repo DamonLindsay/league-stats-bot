@@ -18,11 +18,6 @@ Ideas and known issues for future development, not yet scheduled.
   tiebreaker. Needs the group to agree on a weighting that feels fair before
   implementing.
 
-- **Don't crown "worst performer" for 0 games played** — currently anyone with
-  0 games this week can still be tagged worst performer if they have the
-  lowest win rate (0%). Should be excluded from `worstRowIndex` eligibility,
-  same pattern as the "all tied" guard already in place.
-
 - **Interactive bot commands** — move from a pure webhook to a real Discord
   Application/Bot with an Interactions Endpoint. First target: a `/register`
   slash command so friends can add themselves to Firestore instead of manual
