@@ -1,3 +1,4 @@
+import axios from "axios";
 import { setGlobalOptions } from "firebase-functions";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
@@ -114,7 +115,13 @@ export const dailyLeagueStats = onSchedule(
                     });
                 }
             } catch (error) {
-                logger.error(`Failed to fetch stats for ${friend.discordName}`, error);
+                if (axios.isAxiosError(error)) {
+                    logger.error(
+                        `Failed to fetch stats for ${friend.discordName}: ${error.response?.status} ${error.response?.statusText} - ${JSON.stringify(error.response?.data)}`
+                    );
+                } else {
+                    logger.error(`Failed to fetch stats for ${friend.discordName}`, error);
+                }
                 riftRows.push({
                     discordName: friend.discordName,
                     statusLabel: "ERROR",
